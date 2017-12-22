@@ -126,7 +126,7 @@
         }
         connectButton.onclick = function() {
             stateLabel.innerHTML = "Connecting";
-            socket = new WebSocket(connectionUrl.value + '?user=example');
+            socket = new WebSocket(connectionUrl.value, ['example']);
             socket.onopen = function (event) {
                 updateState();
                 commsLog.innerHTML += '<tr>' +

@@ -2,12 +2,15 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.WebSockets;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using WebSocketGeneralPurpose.Model;
 
 namespace WebSocketGeneralPurpose
 {
@@ -33,15 +36,14 @@ namespace WebSocketGeneralPurpose
 
             app.Use(async (context, next) =>
             {
-                var query = context.Request.Query;
-
                 if (context.Request.Path == "/ws")
                 {
                     if (context.WebSockets.IsWebSocketRequest)
                     {
-                        WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync();
-                        
-                        _userSockets[query["user"].First()] = webSocket;
+                        var protocol = context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault();
+                        WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync(protocol);
+
+                        _userSockets[protocol] = webSocket;
 
                         await Echo(context, webSocket);
                     }
@@ -62,23 +64,39 @@ namespace WebSocketGeneralPurpose
 
         private async Task Echo(HttpContext context, WebSocket webSocket)
         {
+            string jsonString;
+            Message message;
             var buffer = new byte[1024 * 4];
             WebSocketReceiveResult result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
             while (!result.CloseStatus.HasValue)
             {
-                await BroadcastAsync(buffer, result);
+                jsonString = Encoding.UTF8.GetString(buffer);
+
+                try
+                {
+                    message = JsonConvert.DeserializeObject<Message>(jsonString);
+
+                    await SendAsync(buffer, result, message);
+                }
+                catch (Exception)
+                {
+
+                }
 
                 result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
             }
             await webSocket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, CancellationToken.None);
         }
 
-        private async Task BroadcastAsync(byte[] buffer, WebSocketReceiveResult result)
+        private async Task SendAsync(byte[] buffer, WebSocketReceiveResult result, Message message)
         {
-            foreach (var client in _userSockets.Values.Where(socket => socket.State == WebSocketState.Open))
+            if (!_userSockets.ContainsKey(message.User))
             {
-                await client.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
+                return;
             }
+            var client = _userSockets[message.User];
+
+            await client.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
         }
     }
 }

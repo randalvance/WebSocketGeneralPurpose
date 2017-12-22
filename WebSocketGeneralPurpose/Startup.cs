@@ -16,12 +16,13 @@ namespace WebSocketGeneralPurpose
 {
     public class Startup
     {
-        private Dictionary<string, WebSocket> _userSockets = new Dictionary<string, WebSocket>();
+        public static Dictionary<string, WebSocket> UserSockets = new Dictionary<string, WebSocket>();
 
         // This method gets called by the runtime. Use this method to add services to the container.
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddMvc();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -31,6 +32,8 @@ namespace WebSocketGeneralPurpose
             {
                 app.UseDeveloperExceptionPage();
             }
+
+            app.UseMvcWithDefaultRoute();
 
             app.UseWebSockets();
 
@@ -43,7 +46,7 @@ namespace WebSocketGeneralPurpose
                         var protocol = context.WebSockets.WebSocketRequestedProtocols.FirstOrDefault();
                         WebSocket webSocket = await context.WebSockets.AcceptWebSocketAsync(protocol);
 
-                        _userSockets[protocol] = webSocket;
+                        UserSockets[protocol] = webSocket;
 
                         await Echo(context, webSocket);
                     }
@@ -90,11 +93,11 @@ namespace WebSocketGeneralPurpose
 
         private async Task SendAsync(byte[] buffer, WebSocketReceiveResult result, Message message)
         {
-            if (!_userSockets.ContainsKey(message.User))
+            if (!UserSockets.ContainsKey(message.User))
             {
                 return;
             }
-            var client = _userSockets[message.User];
+            var client = UserSockets[message.User];
 
             await client.SendAsync(new ArraySegment<byte>(buffer, 0, result.Count), result.MessageType, result.EndOfMessage, CancellationToken.None);
         }
